@@ -101,7 +101,7 @@ deploy:
 
 deploy-adk-agent-runtime:
 	@echo "🚀 Deploying Google ADK Agent to Vertex AI Agent Runtime (Managed Reasoning Engine)..."
-	@agents-cli deploy \
+	@cd backend && agents-cli deploy \
 	  --project="$(GCP_PROJECT_ID)" \
 	  --region="$(GCP_REGION)" \
 	  --deployment-target=agent_runtime \
@@ -109,7 +109,7 @@ deploy-adk-agent-runtime:
 
 deploy-adk-cloud-run:
 	@echo "🚀 Deploying Google ADK Agent as a Serverless Container on Cloud Run (A2A Protocol)..."
-	@agents-cli deploy \
+	@cd backend && agents-cli deploy \
 	  --project="$(GCP_PROJECT_ID)" \
 	  --region="$(GCP_REGION)" \
 	  --deployment-target=cloud_run \
