@@ -117,8 +117,18 @@ Since this project is designed for GCP, you can build container images remotely 
     ```
     *Cloud Build builds your containers in Google Cloud and deploys both the backend and frontend automatically.*
 
-### 3. Deploying & Registering with Google Agent Registry (Gemini Enterprise)
-The modular Google ADK Agent Engine (`backend/app/agent/`) can be published directly to Google Cloud **Agent Registry (Preview)** and **Gemini Enterprise**:
+### 3. Deploying to AI Agent Runtime & Registering in Google Agent Registry
+The modular Google ADK Agent Engine (`backend/app/agent/`) can be deployed directly to Vertex AI Agent Runtime (Reasoning Engine) or Cloud Run using our automated `Makefile` targets:
+
+```bash
+# 1. Deploy ADK Agent to Vertex AI Agent Runtime (Managed Reasoning Engine)
+make deploy-adk-agent-runtime
+
+# 2. Or Deploy ADK Agent as Serverless Container on Cloud Run (A2A Protocol)
+make deploy-adk-cloud-run
+```
+
+Once deployed, publish your agent to **Agent Registry / Gemini Enterprise** for organization-wide discovery:
 
 ```bash
 # 1. Publish Agent Runtime Deployment (ADK Native Mode - auto-registered in Agent Registry)

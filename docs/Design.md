@@ -124,6 +124,63 @@ gcloud alpha agent-registry agents describe sight-reading-composer
 
 ---
 
+### 2.6 Cross-Project Sharing & Multi-Project Deployment (GCP Enterprise Guide)
+
+To share a deployed Google ADK agent created in **Project A (Producer)** with applications, subagents, or users in **Project B (Consumer)**, follow the standard GCP enterprise cross-project sharing process:
+
+#### Step 1: Deploy with `agents-cli deploy`
+Deploy the agent in **Project A** using the ADK deployment pipeline:
+```bash
+# Option A: Deploy to Vertex AI Agent Runtime (Managed Reasoning Engine)
+agents-cli deploy --project=PROJECT_A --region=us-central1 --deployment-target=agent_runtime
+
+# Option B: Deploy as Serverless Container on Cloud Run (A2A Protocol)
+agents-cli deploy --project=PROJECT_A --region=us-central1 --deployment-target=cloud_run
+```
+
+#### Step 2: Grant Cross-Project IAM Invocation Permissions
+Grant the identity (Service Account) from **Project B** permission to invoke the deployed resource in **Project A**:
+*   **For Vertex AI Agent Runtime (`agent_runtime`)**:
+    Grant `roles/aiplatform.user` on the reasoning engine in **Project A** to **Project B's** service account:
+    ```bash
+    gcloud projects add-iam-policy-binding PROJECT_A \
+      --member="serviceAccount:consumer-sa@PROJECT_B.iam.gserviceaccount.com" \
+      --role="roles/aiplatform.user"
+    ```
+*   **For Cloud Run A2A Service (`cloud_run`)**:
+    Grant `roles/run.invoker` on the Cloud Run service in **Project A** to **Project B's** service account:
+    ```bash
+    gcloud run services add-iam-policy-binding sight-reading-composer \
+      --region=us-central1 --project=PROJECT_A \
+      --member="serviceAccount:consumer-sa@PROJECT_B.iam.gserviceaccount.com" \
+      --role="roles/run.invoker"
+    ```
+
+#### Step 3: Register in Agent Registry for Cross-Project Discovery
+To make the agent discoverable across your enterprise fleet, publish it to **Gemini Enterprise / Agent Registry**:
+```bash
+agents-cli publish gemini-enterprise \
+  --project-id=PROJECT_A \
+  --gemini-enterprise-app-id=projects/PROJECT_A/locations/global/collections/default_collection/engines/<APP_ID> \
+  --registration-type=adk \
+  --display-name="Sight-Reading Composer"
+```
+Other GCP projects within the organization can now discover the agent card and invoke it via the A2A protocol or `:streamQuery` contract.
+
+#### Step 4: Private Enterprise VPC Connectivity (PSC Interface & Agent Gateway)
+For organizations requiring private, VPC-scoped cross-project sharing without public internet endpoints:
+1.  **Deploy with Private Service Connect (PSC-I)**:
+    ```bash
+    agents-cli deploy \
+      --deployment-target=agent_runtime \
+      --network-attachment="projects/PROJECT_A/locations/us-central1/networkAttachments/my-attachment" \
+      --dns-peering-domain="internal.corp."
+    ```
+2.  **Govern with Agent Gateway**:
+    Route all cross-project agent-to-agent and user-to-agent traffic through Google Cloud **Agent Gateway** (`google_network_services_agent_gateway`) to enforce centralized Semantic Governance Policies (SGP) and access controls across projects.
+
+---
+
 ## 3. Technical Stack & Component Specification
 
 ### 3.1 Frontend Framework & Notation Engine

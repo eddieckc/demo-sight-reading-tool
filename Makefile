@@ -31,10 +31,12 @@ help:
 	@echo "  make lint             - Syntax and compilation check for backend & frontend"
 	@echo ""
 	@echo "Google Cloud Platform (Cloud Run, Vertex AI & Agent Registry):"
-	@echo "  make setup-gcp            - Enable GCP APIs, create Gemini SA, and bind IAM roles"
-	@echo "  make deploy-gcp           - Build containers via Cloud Build & deploy to Cloud Run"
-	@echo "  make deploy-agent-registry- Publish agent to Google Agent Registry / Gemini Enterprise"
-	@echo "  make list-agent-registry  - List agents registered in Google Cloud Agent Registry"
+	@echo "  make setup-gcp                - Enable GCP APIs, create Gemini SA, and bind IAM roles"
+	@echo "  make deploy-gcp               - Build containers via Cloud Build & deploy to Cloud Run"
+	@echo "  make deploy-adk-agent-runtime - Deploy ADK agent to Vertex AI Agent Runtime (Reasoning Engine)"
+	@echo "  make deploy-adk-cloud-run     - Deploy ADK agent as serverless container on Cloud Run (A2A)"
+	@echo "  make deploy-agent-registry    - Publish agent to Google Agent Registry / Gemini Enterprise"
+	@echo "  make list-agent-registry      - List agents registered in Google Cloud Agent Registry"
 	@echo ""
 	@echo "Individual Component Development:"
 	@echo "  make install-backend  - Create Python venv and install dependencies using UV"
@@ -96,6 +98,22 @@ deploy:
 	@echo "🚀 Deploying Backend and Frontend to Google Cloud Run via Cloud Build..."
 	@chmod +x scripts/deploy_cloudrun.sh
 	@GCP_PROJECT_ID=$(GCP_PROJECT_ID) GCP_REGION=$(GCP_REGION) ./scripts/deploy_cloudrun.sh
+
+deploy-adk-agent-runtime:
+	@echo "🚀 Deploying Google ADK Agent to Vertex AI Agent Runtime (Managed Reasoning Engine)..."
+	@agents-cli deploy \
+	  --project="$(GCP_PROJECT_ID)" \
+	  --region="$(GCP_REGION)" \
+	  --deployment-target=agent_runtime \
+	  --service-name="sight-reading-composer"
+
+deploy-adk-cloud-run:
+	@echo "🚀 Deploying Google ADK Agent as a Serverless Container on Cloud Run (A2A Protocol)..."
+	@agents-cli deploy \
+	  --project="$(GCP_PROJECT_ID)" \
+	  --region="$(GCP_REGION)" \
+	  --deployment-target=cloud_run \
+	  --service-name="sight-reading-composer"
 
 deploy-agent-registry:
 	@echo "🚀 Registering and publishing agent to Google Agent Registry / Gemini Enterprise..."
