@@ -2,18 +2,18 @@
 # Cloud Run Optimized Dockerfile for Next.js Standalone Frontend (Powered by PNPM)
 # Multi-stage build minimizing container footprint and running as non-root user.
 # ==============================================================================
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 
-# Enable corepack so PNPM is natively available
+# Install PNPM 9 LTS globally
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN npm install -g pnpm@9
 
 # Stage 1: Install dependencies with PNPM
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
-COPY package.json ./
+COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install
 
 # Stage 2: Build Next.js application with PNPM

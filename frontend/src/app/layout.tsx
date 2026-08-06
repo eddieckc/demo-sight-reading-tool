@@ -1,7 +1,7 @@
-import type { Metadata } from "metadata";
+import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "AI Sight-Reading Studio | GCP Cloud-Native Edition",
   description:
     "Generate, render, and synthesize playable musical sight-reading exercises using Google Gemini on Vertex AI and Cloud Run.",

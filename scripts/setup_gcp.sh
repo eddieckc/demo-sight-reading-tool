@@ -43,23 +43,44 @@ else
   echo "ℹ️  Artifact Registry repository ${REPO_NAME} already exists. Skipping."
 fi
 
-# 3. Create Backend Service Account for Cloud Run
-echo "3️⃣  Checking Service Account (${SA_NAME})..."
-if ! gcloud iam service-accounts describe "${SA_EMAIL}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-  gcloud iam service-accounts create "${SA_NAME}" \
-    --display-name="AI Sight Reader Backend Service Account (Vertex AI Gemini Auth)" \
-    --description="Used by Cloud Run Backend to call Gemini on Vertex AI without API keys." \
+# 3. Create Service Accounts for Backend and Frontend
+BACKEND_SA_NAME="ai-sight-reader-backend-sa"
+BACKEND_SA_EMAIL="${BACKEND_SA_NAME}@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+FRONTEND_SA_NAME="ai-sight-reader-frontend-sa"
+FRONTEND_SA_EMAIL="${FRONTEND_SA_NAME}@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
+
+echo "3️⃣  Checking Service Accounts..."
+if ! gcloud iam service-accounts describe "${BACKEND_SA_EMAIL}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud iam service-accounts create "${BACKEND_SA_NAME}" \
+    --display-name="AI Sight Reader Backend SA (Vertex AI Gemini Auth)" \
+    --description="Used by Cloud Run Backend to call Gemini on Vertex AI." \
     --project="${GCP_PROJECT_ID}"
-  echo "✅ Created Service Account: ${SA_EMAIL}"
+  echo "✅ Created Backend Service Account: ${BACKEND_SA_EMAIL}"
 else
-  echo "ℹ️  Service Account ${SA_EMAIL} already exists. Skipping."
+  echo "ℹ️  Backend Service Account ${BACKEND_SA_EMAIL} already exists. Skipping."
 fi
 
-# 4. Grant Vertex AI User IAM Role to Service Account
-echo "4️⃣  Granting roles/aiplatform.user to ${SA_EMAIL}..."
+if ! gcloud iam service-accounts describe "${FRONTEND_SA_EMAIL}" --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud iam service-accounts create "${FRONTEND_SA_NAME}" \
+    --display-name="AI Sight Reader Frontend SA (Internal Service Invoker)" \
+    --description="Used by Cloud Run Frontend to invoke internal private Backend." \
+    --project="${GCP_PROJECT_ID}"
+  echo "✅ Created Frontend Service Account: ${FRONTEND_SA_EMAIL}"
+else
+  echo "ℹ️  Frontend Service Account ${FRONTEND_SA_EMAIL} already exists. Skipping."
+fi
+
+# 4. Grant IAM Roles
+echo "4️⃣  Configuring IAM roles..."
 gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
-  --member="serviceAccount:${SA_EMAIL}" \
+  --member="serviceAccount:${BACKEND_SA_EMAIL}" \
   --role="roles/aiplatform.user" \
+  --condition=None \
+  --quiet
+
+gcloud projects add-iam-policy-binding "${GCP_PROJECT_ID}" \
+  --member="serviceAccount:${FRONTEND_SA_EMAIL}" \
+  --role="roles/run.invoker" \
   --condition=None \
   --quiet
 

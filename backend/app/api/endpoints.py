@@ -6,6 +6,23 @@ router = APIRouter()
 
 
 @router.get(
+    "/",
+    status_code=status.HTTP_200_OK,
+    summary="API Root & Status",
+    description="Returns metadata and available endpoints for the AI Sight-Reading Tool backend API."
+)
+async def root():
+    return {
+        "service": "ai-sight-reader-backend",
+        "status": "online",
+        "documentation": "/docs",
+        "health": "/health",
+        "generate_endpoint": "/api/generate-exercise",
+        "description": "FastAPI backend & ADK Agent Engine. Access the Next.js frontend web app for the interactive UI."
+    }
+
+
+@router.get(
     "/health",
     status_code=status.HTTP_200_OK,
     summary="Service Health Check",
