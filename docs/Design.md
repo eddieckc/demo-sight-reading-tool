@@ -98,7 +98,38 @@ When deploying the agent to Vertex AI Agent Runtime (`agents-cli deploy --deploy
       --display-name "Sight-Reading Composer" \
       --description "Dynamic AI Sight-Reading Composer Agent"
     ```
-*   **Execution Contract**: Gemini Enterprise invokes the agent natively via `:streamQuery` on its reasoning engine resource, dispatching directly to the ADK Agent's `streaming_agent_run_with_events` method.
+*   **Execution Contract & Wire Protocol**:
+    Gemini Enterprise invokes the agent natively via `:streamQuery` on its reasoning engine resource, which dispatches HTTP `POST /api/stream_reasoning_engine` with payload:
+    ```json
+    {
+      "class_method": "streaming_agent_run_with_events",
+      "input": {
+        "request_json": "{\"message\": {\"role\": \"user\", \"parts\": [{\"text\": \"...\"}]}, \"user_id\": \"...\", \"session_id\": \"...\"}"
+      }
+    }
+    ```
+    The endpoint yields line-delimited JSON `_StreamingRunResponse` objects conforming to the GE client specification:
+    ```json
+    {
+      "events": [
+        {
+          "id": "<UUID>",
+          "author": "sight_reading_composer",
+          "content": {
+            "role": "model",
+            "parts": [{"text": "..."}]
+          },
+          "invocation_id": "<INVOCATION_ID>",
+          "actions": {},
+          "timestamp": 1786068692.0,
+          "output": { ... }
+        }
+      ],
+      "artifacts": [],
+      "session_id": "<SESSION_ID>"
+    }
+    ```
+    *Note*: Gemini Enterprise specifically checks for the top-level `events` array in each chunk; missing this array causes `Reasoning Engine stream closed cleanly without producing any events`.
 
 #### 2. Cloud Run Container Deployment (A2A Protocol Mode)
 When deploying as a serverless container on Cloud Run (`agents-cli deploy --deployment-target=cloud_run`), the agent serves the Agent-to-Agent (A2A) protocol via an agent card endpoint (`/a2a/app/.well-known/agent-card.json`).
