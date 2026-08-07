@@ -15,7 +15,7 @@ FRONTEND_SA_EMAIL="${FRONTEND_SA_NAME}@${GCP_PROJECT_ID}.iam.gserviceaccount.com
 REPO_NAME="ai-sight-reader-repo"
 BACKEND_SERVICE="ai-sight-reader-backend"
 FRONTEND_SERVICE="ai-sight-reader-frontend"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-flash}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
 
 if [ -z "${GCP_PROJECT_ID}" ]; then
   echo "❌ Error: GCP_PROJECT_ID is not set. Please export GCP_PROJECT_ID='your-project-id'"

@@ -1,5 +1,130 @@
 import re
-from typing import Tuple
+from typing import Tuple, List, Optional, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.agent.instruments import InstrumentRange
+
+
+KEY_ACCIDENTALS: Dict[str, Dict[str, int]] = {
+    "C": {},
+    "Am": {},
+    "G": {"F": 1},
+    "Em": {"F": 1},
+    "D": {"F": 1, "C": 1},
+    "Bm": {"F": 1, "C": 1},
+    "A": {"F": 1, "C": 1, "G": 1},
+    "F#m": {"F": 1, "C": 1, "G": 1},
+    "E": {"F": 1, "C": 1, "G": 1, "D": 1},
+    "C#m": {"F": 1, "C": 1, "G": 1, "D": 1},
+    "B": {"F": 1, "C": 1, "G": 1, "D": 1, "A": 1},
+    "G#m": {"F": 1, "C": 1, "G": 1, "D": 1, "A": 1},
+    "F": {"B": -1},
+    "Dm": {"B": -1},
+    "Bb": {"B": -1, "E": -1},
+    "Gm": {"B": -1, "E": -1},
+    "Eb": {"B": -1, "E": -1, "A": -1},
+    "Cm": {"B": -1, "E": -1, "A": -1},
+    "Ab": {"B": -1, "E": -1, "A": -1, "D": -1},
+    "Fm": {"B": -1, "E": -1, "A": -1, "D": -1},
+    "Db": {"B": -1, "E": -1, "A": -1, "D": -1, "G": -1},
+    "Bbm": {"B": -1, "E": -1, "A": -1, "D": -1, "G": -1},
+    "Gb": {"B": -1, "E": -1, "A": -1, "D": -1, "G": -1, "C": -1},
+}
+
+
+def parse_abc_note_midi(
+    accidental: Optional[str],
+    letter: str,
+    octave_str: str,
+    key_signature: str = "C"
+) -> int:
+    """
+    Calculates the standard MIDI pitch number (Middle C = C4 = MIDI 60)
+    for an individual ABC notation note token.
+    """
+    semitones = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    base_oct = 4 if letter.isupper() else 5
+    octave = base_oct - octave_str.count(",") + octave_str.count("'")
+    letter_upper = letter.upper()
+    base_semi = semitones.get(letter_upper, 0)
+
+    if accidental == "^":
+        acc_offset = 1
+    elif accidental == "^^":
+        acc_offset = 2
+    elif accidental == "_":
+        acc_offset = -1
+    elif accidental == "__":
+        acc_offset = -2
+    elif accidental == "=":
+        acc_offset = 0
+    else:
+        # Standard key signature accidental lookup
+        clean_key = key_signature.split()[0].strip() if key_signature else "C"
+        key_accs = KEY_ACCIDENTALS.get(clean_key, {})
+        acc_offset = key_accs.get(letter_upper, 0)
+
+    return (octave + 1) * 12 + base_semi + acc_offset
+
+
+def extract_score_pitches(body_lines: List[str], key_signature: str = "C") -> List[Tuple[str, int]]:
+    """
+    Extracts all musical note tokens and their corresponding MIDI pitch values
+    from the body lines of an ABC score.
+    """
+    pitches: List[Tuple[str, int]] = []
+    # Match accidental, letter, and octave modifiers; ignore rhythm numbers/slashes
+    note_pattern = re.compile(r"(?P<acc>\^{1,2}|_{1,2}|={1})?(?P<letter>[A-Ga-g])(?P<octave>[,']*)")
+
+    for line in body_lines:
+        line_str = line.strip()
+        if not line_str or line_str.startswith("V:") or line_str.startswith("%") or line_str.startswith("P:"):
+            continue
+
+        # Strip inline text annotations like "C" or "Am"
+        sanitized_line = re.sub(r'"[^"]*"', '', line_str)
+        # Strip exclamation marks / decorations like !trill! or !f!
+        sanitized_line = re.sub(r'![^!]*!', '', sanitized_line)
+
+        for match in note_pattern.finditer(sanitized_line):
+            acc = match.group("acc")
+            letter = match.group("letter")
+            octave_mod = match.group("octave")
+            raw_token = f"{acc or ''}{letter}{octave_mod}"
+            midi = parse_abc_note_midi(acc, letter, octave_mod, key_signature)
+            pitches.append((raw_token, midi))
+
+    return pitches
+
+
+def validate_instrument_pitch_range(
+    pitches: List[Tuple[str, int]],
+    instrument: str,
+    difficulty: Optional[str] = None
+) -> Tuple[bool, str]:
+    """
+    Validates that every note pitch in the score falls within the target instrument's
+    playable physical range and pedagogical register.
+    """
+    from app.agent.instruments import get_instrument_config
+    config = get_instrument_config(instrument)
+    if not config:
+        return True, ""
+
+    for raw_token, midi in pitches:
+        # Check absolute physical playable bounds
+        if midi < config.min_midi:
+            return False, (
+                f"Pitch '{raw_token}' (MIDI {midi}) is below the minimum playable pitch "
+                f"'{config.min_abc}' ({config.min_name}, MIDI {config.min_midi}) for {instrument.title()}."
+            )
+        if midi > config.max_midi:
+            return False, (
+                f"Pitch '{raw_token}' (MIDI {midi}) is above the maximum playable pitch "
+                f"'{config.max_abc}' ({config.max_name}, MIDI {config.max_midi}) for {instrument.title()}."
+            )
+
+    return True, ""
 
 
 def beautify_abc_line(line: str, note_length: str = "1/8") -> str:
@@ -20,8 +145,6 @@ def beautify_abc_line(line: str, note_length: str = "1/8") -> str:
     line = re.sub(r"([A-Ga-gz^=_][,\']*)1(?![0-9/])", r"\1", line)
 
     if note_length == "1/16":
-        # Under L:1/16, 4 duration units = 1 beat (quarter note is 4, eighth note is 2, sixteenth is 1)
-        # Beams pitches that form a 1-beat group while leaving standalone rests un-beamed
         pair_2_2 = re.compile(
             r"(?:^|(?<=[\s|\[]))([A-Ga-g^=_][,\']*2)\s+([A-Ga-g^=_][,\']*2)(?!\S*[0-9>/.-])"
         )
@@ -48,8 +171,6 @@ def beautify_abc_line(line: str, note_length: str = "1/8") -> str:
                     break
                 line = new_line
     else:
-        # Default L:1/8 (2 duration units = 1 beat)
-        # Group adjacent single eighth notes within a beat so they beam beautifully together
         pair_pattern = re.compile(
             r"(?:^|(?<=[\s|\[]))([A-Ga-g^=_][,\']*)\s+([A-Ga-g^=_][,\']*)(?!\S*[0-9>/.-])"
         )
@@ -68,12 +189,15 @@ def clean_and_validate_abc(
     default_key: str = "C",
     default_meter: str = "4/4",
     default_tempo: int = 110,
-    expected_bars: int = 4
+    expected_bars: int = 4,
+    instrument: Optional[str] = None,
+    difficulty: Optional[str] = None,
 ) -> Tuple[bool, str, str]:
     """
     Cleans raw LLM response output, validates structural ABC Notation headers,
-    enforces requested measure count, removes unnecessary ornamentation (trills/grace notes),
-    beautifies note beaming and duration display according to L, and filters out commentary.
+    enforces requested measure count, validates instrument pitch range constraints,
+    removes unnecessary ornamentation (trills/grace notes), beautifies note beaming,
+    and returns the canonical ABC notation.
 
     Args:
         raw_abc: The raw string returned by the generative AI model.
@@ -82,6 +206,8 @@ def clean_and_validate_abc(
         default_meter: Fallback time signature if M: header is omitted.
         default_tempo: Fallback tempo if Q: header is omitted.
         expected_bars: Number of measures required in the exercise.
+        instrument: Target instrument for pitch range and clef validation.
+        difficulty: Difficulty level for pedagogical range validation.
 
     Returns:
         Tuple[bool, str, str]: (is_valid, cleaned_abc_string, error_message_if_any)
@@ -99,7 +225,7 @@ def clean_and_validate_abc(
     # Also strip stray opening/closing markdown ticks if not matched by whole block
     lines = [line.strip() for line in text.splitlines() if not line.strip().startswith("```")]
 
-    # 2. Extract canonical metadata headers (X, T, M, L, Q, K, C) vs body/melody lines (including V:1 voices)
+    # 2. Extract canonical metadata headers (X, T, M, L, Q, K, C) vs body/melody lines
     headers = {}
     body_lines = []
     header_regex = re.compile(r"^([A-Za-z]):\s*(.*)$")
@@ -113,7 +239,6 @@ def clean_and_validate_abc(
         key_char = header_match.group(1).upper() if header_match else ""
 
         # Treat only canonical metadata headers before K: as header dictionary entries.
-        # Any voice lines (V:), lyrics (w:), or anything after K: is part of the musical body!
         if not seen_key_signature and header_match and len(key_char) == 1 and key_char in metadata_keys:
             headers[key_char] = header_match.group(2)
             if key_char == "K":
@@ -135,7 +260,6 @@ def clean_and_validate_abc(
     body_lines = musical_body_lines
 
     # 4. Strip trills and ornamentation (TR skill is not necessary for sight-reading practice)
-    # Strip ~ (ABC trill symbol), !trill!, "tr", and grace notes { ... }
     cleaned_body = []
     for line in body_lines:
         line = re.sub(r"~|!trill!|\"tr\"|\bT(?=[A-Ga-g])", "", line)
@@ -151,11 +275,13 @@ def clean_and_validate_abc(
     q_val = headers.get("Q", f"1/4={default_tempo}")
     k_val = headers.get("K", default_key)
 
-    # 6. Beautify notes post-processing algorithm according to default note length (L):
-    # Makes quarter notes the basic beat unit separated by spaces, strips redundant '1' durations,
-    # and beams adjacent notes together by beat (e.g. '| f2 e2 d1 e1 d2 |' -> '| f2 e2 de d2 |' for L:1/8,
-    # or '| G2 B2 d2 g2 b3 a g2 e2 |' -> '| G2B2 d2g2 b3a g2e2 |' for L:1/16)
-    body_lines = [beautify_abc_line(line, note_length=l_val) for line in body_lines]
+    # Ensure appropriate clef for instruments like cello
+    if instrument:
+        from app.agent.instruments import get_instrument_config
+        inst_config = get_instrument_config(instrument)
+        if inst_config and inst_config.clef == "bass":
+            if "clef=bass" not in k_val.lower() and not any("clef=bass" in b.lower() for b in body_lines if b.startswith("V:")):
+                k_val = f"{k_val} clef=bass"
 
     # Validate that body_lines actually contains musical note/rest content
     has_musical_content = any(re.search(r"[A-Ga-gz|0-9]", line) for line in body_lines if not line.startswith("V:"))
@@ -172,7 +298,22 @@ def clean_and_validate_abc(
             f"ABC notation has only {total_bars_found} measure(s), but {expected_bars} measures were required."
         )
 
-    # 7. Construct canonical, validated ABC Notation string
+    # 6. Validate instrument pitch range
+    if instrument:
+        key_sig_clean = k_val.split()[0].strip()
+        pitches = extract_score_pitches(body_lines, key_signature=key_sig_clean)
+        is_range_valid, range_err = validate_instrument_pitch_range(
+            pitches=pitches,
+            instrument=instrument,
+            difficulty=difficulty
+        )
+        if not is_range_valid:
+            return False, "", range_err
+
+    # 7. Beautify notes post-processing algorithm according to default note length (L)
+    body_lines = [beautify_abc_line(line, note_length=l_val) for line in body_lines]
+
+    # 8. Construct canonical, validated ABC Notation string
     canonical_headers = [
         f"X:{x_val}",
         f"T:{t_val}",
@@ -184,3 +325,4 @@ def clean_and_validate_abc(
 
     clean_abc = "\n".join(canonical_headers + body_lines)
     return True, clean_abc, ""
+

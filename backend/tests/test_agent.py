@@ -28,8 +28,24 @@ class TestAdkAgentEngine(unittest.TestCase):
         )
         prompt = build_composition_prompt(req)
         self.assertIn("SAXOPHONE", prompt)
+        self.assertIn("INTERMEDIATE LEVEL", prompt)
+        self.assertIn("_B,", prompt)
         self.assertIn("EXACTLY 4 BARS REQUIRED", prompt)
         self.assertIn("no TR skill", prompt)
+
+    def test_build_composition_prompt_with_retry_error(self):
+        req = ExerciseRequest(
+            difficulty="intermediate",
+            key_signature="G",
+            instrument="saxophone",
+            time_signature="4/4",
+            tempo=110,
+            bars=4,
+        )
+        retry_err = "Pitch 'A,' (MIDI 57) is below the minimum playable pitch '_B,' for Saxophone."
+        prompt = build_composition_prompt(req, previous_error=retry_err)
+        self.assertIn("PREVIOUS ATTEMPT CORRECTION NEEDED", prompt)
+        self.assertIn(retry_err, prompt)
 
     def test_build_composition_prompt_16_bars(self):
         req = ExerciseRequest(
@@ -55,11 +71,26 @@ class TestAdkAgentEngine(unittest.TestCase):
             "K:G\n"
             "G2 B2 d2 g2 | f2 d2 z2 G2 | c2 e2 d2 B2 | A4 G2 z2 |]"
         )
-        result = validate_abc_score_tool(sample, expected_bars=4)
+        result = validate_abc_score_tool(sample, expected_bars=4, instrument="violin")
         self.assertTrue(result["is_valid"])
         self.assertEqual(result["expected_bars"], 4)
         self.assertIn("G2 B2 d2 g2", result["cleaned_abc"])
 
+    def test_validate_abc_score_tool_rejects_out_of_range(self):
+        sample = (
+            "X:1\n"
+            "T:Test Score\n"
+            "M:4/4\n"
+            "L:1/8\n"
+            "Q:1/4=110\n"
+            "K:C\n"
+            "A,2 C2 D2 E2 | F2 G2 A2 B2 | c2 d2 e2 f2 | g2 z2 z4 |]"
+        )
+        result = validate_abc_score_tool(sample, expected_bars=4, instrument="saxophone")
+        self.assertFalse(result["is_valid"])
+        self.assertIn("below the minimum playable pitch '_B,'", result["error_message"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

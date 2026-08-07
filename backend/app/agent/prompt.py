@@ -54,15 +54,26 @@ def get_measure_layout_plan(bars: int) -> str:
         return f"MEASURE LAYOUT PLAN (EXACTLY {bars} BARS REQUIRED): Generate exactly {bars} measures ending with '|]'."
 
 
-def build_composition_prompt(request: ExerciseRequest) -> str:
+def build_composition_prompt(request: ExerciseRequest, previous_error: str = "") -> str:
     """
     Builds the user prompt requesting the ADK Agent to compose a sight-reading exercise.
-    Incorporates the individualized instrument character profile and exact measure layout plan.
+    Incorporates the individualized instrument character profile, exact measure layout plan,
+    and self-healing feedback from previous failed attempts if any.
     """
-    instrument_profile = get_instrument_profile(request.instrument)
+    instrument_profile = get_instrument_profile(request.instrument, request.difficulty)
     measure_layout = get_measure_layout_plan(request.bars)
 
+    error_feedback = ""
+    if previous_error:
+        error_feedback = (
+            f"PREVIOUS ATTEMPT CORRECTION NEEDED:\n"
+            f"Your previous attempt failed validation with error: {previous_error}\n"
+            f"Please strictly fix this error: keep all pitches within the instrument's playable range, "
+            f"use the correct clef, and ensure exact measure count.\n\n"
+        )
+
     return (
+        f"{error_feedback}"
         f"Write a {request.bars}-measure musical sight-reading exercise in standard ABC notation format "
         f"for {request.instrument} at {request.difficulty} difficulty in the key of {request.key_signature} "
         f"with {request.time_signature} meter at {request.tempo} BPM.\n\n"
@@ -70,8 +81,10 @@ def build_composition_prompt(request: ExerciseRequest) -> str:
         f"{measure_layout}\n\n"
         "REQUIREMENTS:\n"
         f"1. Must have exactly {request.bars} measures of music separated by '|' bar lines and ending with '|]'.\n"
-        "2. Include at least one musical rest ('z', 'z2', or 'z4') in the melody.\n"
-        "3. Do not include any trills, grace notes, or ornamentation (no TR skill).\n"
-        "4. Separate individual notes with a space so notes are not beamed or linked together.\n"
-        "5. Do not use markdown backticks, bullet points, or explanations—output only the raw ABC notation headers and notes."
+        f"2. Every note MUST be within the allowed pitch range for {request.instrument}. Do NOT exceed lowest or highest note boundaries.\n"
+        "3. Include at least one musical rest ('z', 'z2', or 'z4') in the melody.\n"
+        "4. Do not include any trills, grace notes, or ornamentation (no TR skill).\n"
+        "5. Separate individual notes with a space so notes are not beamed or linked together.\n"
+        "6. Do not use markdown backticks, bullet points, or explanations—output only the raw ABC notation headers and notes."
     )
+

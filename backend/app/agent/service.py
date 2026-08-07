@@ -56,7 +56,7 @@ class SightReadingAgentEngine:
         last_error = ""
         for attempt in range(1, max_retries + 1):
             try:
-                user_prompt = build_composition_prompt(request)
+                user_prompt = build_composition_prompt(request, previous_error=last_error)
 
                 # Set max_output_tokens=8192 so reasoning models generating 16-bar scores
                 # have ample token budget for both internal reasoning and full ABC notation output.
@@ -89,7 +89,9 @@ class SightReadingAgentEngine:
                     default_key=request.key_signature,
                     default_meter=request.time_signature,
                     default_tempo=request.tempo,
-                    expected_bars=request.bars
+                    expected_bars=request.bars,
+                    instrument=request.instrument,
+                    difficulty=request.difficulty,
                 )
 
                 if validation_result["is_valid"]:
